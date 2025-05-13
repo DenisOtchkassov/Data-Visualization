@@ -1,6 +1,7 @@
 # Data Visualization Dashboard - Version 1
 
 This is a simple data visualization web application that allows users to upload CSV files and get basic charts.
+![image](https://github.com/user-attachments/assets/c06e35c8-b187-4d27-afaf-922f447f0495)
 
 ## Features
 
