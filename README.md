@@ -53,4 +53,3 @@ This application uses:
 - Pure JavaScript for all data processing
 - CSS for styling and dark/light theme support
 
-No installation, server setup, or internet connection required after initial download!
