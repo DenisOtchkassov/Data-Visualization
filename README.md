@@ -1,6 +1,8 @@
 # Data Visualization Dashboard
 
-A simple, powerful data visualization web application that allows users to upload CSV files and create interactive charts. This is a standalone application that runs entirely in your browser - no server setup required!
+
+This is a simple data visualization web application that allows users to upload CSV files and get basic charts for their data.
+
 
 ## Features
 
@@ -19,7 +21,6 @@ A simple, powerful data visualization web application that allows users to uploa
 - Sample dataset included for testing
 
 ## How to Use
-
 1. Simply open the `standalone.html` file in your browser
 2. Upload a CSV file or use the sample data
 3. Explore your data through:
