@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Standalone Data Visualization</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.0/papaparse.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            line-height: 1.6;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .upload-section {
+            background-color: #f5f5f5;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .data-section, .chart-section, .stats-section, .filter-section {
+            margin-top: 30px;
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        canvas {
+            max-width: 100%;
+        }
+        #chartContainer {
+            height: 400px;
+            margin-top: 20px;
+        }
+        .sample-link {
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .loading:after {
+            content: ".";
+            animation: dots 1s steps(5, end) infinite;
+        }
+        @keyframes dots {
+            0%, 20% {
+                color: rgba(0,0,0,0);
+                text-shadow: .25em 0 0 rgba(0,0,0,0), .5em 0 0 rgba(0,0,0,0);
+            }
+            40% {
+                color: #333;
+                text-shadow: .25em 0 0 rgba(0,0,0,0), .5em 0 0 rgba(0,0,0,0);
+            }
+            60% {
+                text-shadow: .25em 0 0 #333, .5em 0 0 rgba(0,0,0,0);
+            }
+            80%, 100% {
+                text-shadow: .25em 0 0 #333, .5em 0 0 #333;
+            }
+        }
+        select, input, button {
+            padding: 8px 12px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .filter-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .stats-card {
+            background-color: white;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 10px 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        .stat-value {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        .section-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .toggle-section {
+            font-size: 0.9em;
+            color: #666;
+            cursor: pointer;
+            user-select: none;
+        }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            margin-top: 15px;
+        }
+        .pagination button {
+            margin: 0 5px;
+        }
+        .dark-mode {
+            background-color: #1e1e1e;
+            color: #f0f0f0;
+        }
+        .dark-mode .upload-section,
+        .dark-mode .data-section, 
+        .dark-mode .chart-section, 
+        .dark-mode .stats-section, 
+        .dark-mode .filter-section {
+            background-color: #2d2d2d;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        .dark-mode th {
+            background-color: #3d3d3d;
+        }
+        .dark-mode table, .dark-mode th, .dark-mode td {
+            border-color: #444;
+        }
+        .dark-mode .stats-card {
+            background-color: #333;
+        }
+        .theme-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            cursor: pointer;
+            font-size: 24px;
+        }
+    </style>
+</head>
+<body>
+    <div class="theme-toggle" id="themeToggle">☀️</div>
+    <div class="container">
+        <div class="header">
+            <h1>Standalone Data Visualization</h1>
+            <p>Upload a CSV file to see visualization - No server needed!</p>
+        </div>
+
+        <div class="upload-section">
+            <h2>Upload Data</h2>
+            <form id="uploadForm">
+                <input type="file" id="csvFile" accept=".csv" required>
+                <button type="submit">Parse & Visualize</button>
+            </form>
+            <div class="sample-link">
+                <p>Don't have a CSV file? <a href="#" id="loadSampleData">Load sample data</a></p>
+            </div>
+            <div id="loadingIndicator" class="loading">Processing file</div>
+        </div>
+
+        <div class="filter-section" id="filterSection" style="display: none;">
+            <div class="section-title">
+                <h2>Filter Data</h2>
+                <span class="toggle-section" id="toggleFilter">Hide</span>
+            </div>
+            <div id="filterContent">
+                <div id="filterControls">
+                    <div class="filter-row">
+                        <select id="filterColumn"></select>
+                        <select id="filterOperation">
+                            <option value="equals">Equals</option>
+                            <option value="contains">Contains</option>
+                            <option value="greaterThan">Greater Than</option>
+                            <option value="lessThan">Less Than</option>
+                        </select>
+                        <input type="text" id="filterValue" placeholder="Filter value">
+                        <button id="applyFilter">Apply Filter</button>
+                        <button id="resetFilter">Reset</button>
+                    </div>
+                </div>
+                <div>
+                    <p>Active filters: <span id="activeFilters">None</span></p>
+                    <p>Showing <span id="rowCount">0</span> of <span id="totalRowCount">0</span> rows</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="stats-section" id="statsSection" style="display: none;">
+            <div class="section-title">
+                <h2>Data Statistics</h2>
+                <span class="toggle-section" id="toggleStats">Hide</span>
+            </div>
+            <div id="statsContent">
+                <p>Select a numeric column to see statistics:</p>
+                <select id="statsColumn"></select>
+                <div id="statsDisplay" class="stats-grid"></div>
+            </div>
+        </div>
+
+        <div class="data-section" id="dataSection" style="display: none;">
+            <div class="section-title">
+                <h2>Data Preview</h2>
+                <span class="toggle-section" id="toggleData">Hide</span>
+            </div>
+            <div id="dataContent">
+                <div id="dataPreview">
+                    <table id="dataTable">
+                        <thead id="tableHead"></thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                    <div class="pagination" id="pagination">
+                        <button id="prevPage">Previous</button>
+                        <span id="pageInfo">Page 1 of 1</span>
+                        <button id="nextPage">Next</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="chart-section" id="chartSection" style="display: none;">
+            <div class="section-title">
+                <h2>Chart Visualization</h2>
+                <span class="toggle-section" id="toggleChart">Hide</span>
+            </div>
+            <div id="chartContent">
+                <div>
+                    <label for="chartType">Chart Type:</label>
+                    <select id="chartType">
+                        <option value="bar">Bar Chart</option>
+                        <option value="line">Line Chart</option>
+                        <option value="pie">Pie Chart</option>
+                        <option value="scatter">Scatter Plot</option>
+                        <option value="polarArea">Polar Area</option>
+                    </select>
+                    
+                    <label for="xAxis">X-Axis:</label>
+                    <select id="xAxis"></select>
+                    
+                    <label for="yAxis">Y-Axis:</label>
+                    <select id="yAxis"></select>
+                    
+                    <button id="generateChart">Generate Chart</button>
+                </div>
+                <div id="chartContainer">
+                    <canvas id="dataChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Sample data for users to test with
+        const sampleData = `Month,Region,Category,Sales,Quantity
+January,North,Electronics,5200,25
+January,South,Electronics,4500,20
+January,East,Electronics,3800,18
+January,West,Electronics,6100,30
+February,North,Electronics,4800,22
+February,South,Electronics,5100,24
+February,East,Electronics,3500,15
+February,West,Electronics,5900,28
+March,North,Electronics,5500,26
+March,South,Electronics,4700,21
+March,East,Electronics,4100,19
+March,West,Electronics,6300,32
+January,North,Clothing,3200,40
+January,South,Clothing,2900,35
+January,East,Clothing,2500,30
+January,West,Clothing,3600,45
+February,North,Clothing,2800,35
+February,South,Clothing,3100,38
+February,East,Clothing,2300,28
+February,West,Clothing,3400,42
+March,North,Clothing,3300,41
+March,South,Clothing,3000,37
+March,East,Clothing,2700,33
+March,West,Clothing,3700,46
+January,North,Food,1800,90
+January,South,Food,1600,80
+January,East,Food,1400,70
+January,West,Food,2000,100
+February,North,Food,1700,85
+February,South,Food,1900,95
+February,East,Food,1300,65
+February,West,Food,1950,98
+March,North,Food,1850,92
+March,South,Food,1750,87
+March,East,Food,1500,75
+March,West,Food,2100,105`;
+
+        // Global variables to store data
+        let csvData = [];
+        let filteredData = [];
+        let headers = [];
+        let currentChart = null;
+        let currentPage = 1;
+        const rowsPerPage = 10;
+        let activeFilters = [];
+
+        // DOM elements
+        const uploadForm = document.getElementById('uploadForm');
+        const loadSampleLink = document.getElementById('loadSampleData');
+        const dataSection = document.getElementById('dataSection');
+        const chartSection = document.getElementById('chartSection');
+        const statsSection = document.getElementById('statsSection');
+        const filterSection = document.getElementById('filterSection');
+        const tableHead = document.getElementById('tableHead');
+        const tableBody = document.getElementById('tableBody');
+        const xAxisSelect = document.getElementById('xAxis');
+        const yAxisSelect = document.getElementById('yAxis');
+        const chartTypeSelect = document.getElementById('chartType');
+        const generateChartBtn = document.getElementById('generateChart');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const statsColumnSelect = document.getElementById('statsColumn');
+        const statsDisplay = document.getElementById('statsDisplay');
+        const filterColumnSelect = document.getElementById('filterColumn');
+        const filterOperationSelect = document.getElementById('filterOperation');
+        const filterValueInput = document.getElementById('filterValue');
+        const applyFilterBtn = document.getElementById('applyFilter');
+        const resetFilterBtn = document.getElementById('resetFilter');
+        const activeFiltersSpan = document.getElementById('activeFilters');
+        const rowCountSpan = document.getElementById('rowCount');
+        const totalRowCountSpan = document.getElementById('totalRowCount');
+        const prevPageBtn = document.getElementById('prevPage');
+        const nextPageBtn = document.getElementById('nextPage');
+        const pageInfoSpan = document.getElementById('pageInfo');
+        const themeToggle = document.getElementById('themeToggle');
+        
+        // Toggle section visibility
+        document.getElementById('toggleData').addEventListener('click', () => toggleSection('dataContent', 'toggleData'));
+        document.getElementById('toggleChart').addEventListener('click', () => toggleSection('chartContent', 'toggleChart'));
+        document.getElementById('toggleStats').addEventListener('click', () => toggleSection('statsContent', 'toggleStats'));
+        document.getElementById('toggleFilter').addEventListener('click', () => toggleSection('filterContent', 'toggleFilter'));
+        
+        // Toggle theme
+        themeToggle.addEventListener('click', toggleTheme);
+
+        // Event listeners
+        uploadForm.addEventListener('submit', handleFileUpload);
+        loadSampleLink.addEventListener('click', loadSampleDataFunc);
+        generateChartBtn.addEventListener('click', generateChart);
+        statsColumnSelect.addEventListener('change', generateStats);
+        applyFilterBtn.addEventListener('click', applyFilter);
+        resetFilterBtn.addEventListener('click', resetFilter);
+        prevPageBtn.addEventListener('click', () => changePage(-1));
+        nextPageBtn.addEventListener('click', () => changePage(1));
+
+        // Toggle section visibility
+        function toggleSection(contentId, toggleId) {
+            const content = document.getElementById(contentId);
+            const toggle = document.getElementById(toggleId);
+            
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                toggle.textContent = 'Hide';
+            } else {
+                content.style.display = 'none';
+                toggle.textContent = 'Show';
+            }
+        }
+        
+        // Toggle theme (dark/light mode)
+        function toggleTheme() {
+            document.body.classList.toggle('dark-mode');
+            themeToggle.textContent = document.body.classList.contains('dark-mode') ? '🌙' : '☀️';
+        }
+
+        // Handle file upload using FileReader (client-side)
+        function handleFileUpload(event) {
+            event.preventDefault();
+            
+            const fileInput = document.getElementById('csvFile');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select a CSV file');
+                return;
+            }
+            
+            // Show loading indicator
+            loadingIndicator.style.display = 'block';
+            
+            // Use PapaParse to parse CSV
+            Papa.parse(file, {
+                header: true,
+                dynamicTyping: true,
+                complete: function(results) {
+                    processData(results.data);
+                    loadingIndicator.style.display = 'none';
+                },
+                error: function(error) {
+                    console.error('Error:', error);
+                    alert('Error parsing file: ' + error.message);
+                    loadingIndicator.style.display = 'none';
+                }
+            });
+        }
+
+        // Load sample data function
+        function loadSampleDataFunc(event) {
+            event.preventDefault();
+            
+            // Show loading indicator for consistency
+            loadingIndicator.style.display = 'block';
+            
+            // Parse the sample data
+            Papa.parse(sampleData, {
+                header: true,
+                dynamicTyping: true,
+                complete: function(results) {
+                    processData(results.data);
+                    loadingIndicator.style.display = 'none';
+                }
+            });
+        }
+
+        // Process the parsed data
+        function processData(data) {
+            // Filter out any rows that are entirely empty
+            csvData = data.filter(row => {
+                return Object.values(row).some(val => val !== null && val !== '');
+            });
+            
+            filteredData = [...csvData];
+            
+            if (csvData.length > 0) {
+                headers = Object.keys(csvData[0]);
+                
+                // Set up filter options
+                setupFilterOptions();
+                
+                // Set up stats options
+                setupStatsOptions();
+                
+                // Display the data preview
+                currentPage = 1;
+                displayDataPreview();
+                updatePagination();
+                
+                // Set up the chart options
+                setupChartOptions();
+                
+                // Show the data and chart sections
+                dataSection.style.display = 'block';
+                chartSection.style.display = 'block';
+                statsSection.style.display = 'block';
+                filterSection.style.display = 'block';
+                
+                // Update row counts
+                updateRowCounts();
+            } else {
+                alert('The CSV file is empty');
+            }
+        }
+
+        // Set up filter options
+        function setupFilterOptions() {
+            filterColumnSelect.innerHTML = '';
+            
+            headers.forEach(header => {
+                let option = document.createElement('option');
+                option.value = header;
+                option.textContent = header;
+                filterColumnSelect.appendChild(option);
+            });
+        }
+
+        // Apply filter
+        function applyFilter() {
+            const column = filterColumnSelect.value;
+            const operation = filterOperationSelect.value;
+            const value = filterValueInput.value;
+            
+            if (!column || !value) {
+                alert('Please select a column and enter a filter value');
+                return;
+            }
+            
+            // Add to active filters
+            activeFilters.push({
+                column,
+                operation,
+                value
+            });
+            
+            // Apply all filters
+            applyAllFilters();
+            
+            // Update UI
+            updateActiveFiltersDisplay();
+            currentPage = 1;
+            displayDataPreview();
+            updatePagination();
+            updateRowCounts();
+        }
+
+        // Apply all active filters
+        function applyAllFilters() {
+            filteredData = csvData.filter(row => {
+                return activeFilters.every(filter => {
+                    const cellValue = row[filter.column];
+                    const filterValue = filter.value;
+                    
+                    // Handle different operation types
+                    switch (filter.operation) {
+                        case 'equals':
+                            return String(cellValue).toLowerCase() === String(filterValue).toLowerCase();
+                        case 'contains':
+                            return String(cellValue).toLowerCase().includes(String(filterValue).toLowerCase());
+                        case 'greaterThan':
+                            return Number(cellValue) > Number(filterValue);
+                        case 'lessThan':
+                            return Number(cellValue) < Number(filterValue);
+                        default:
+                            return true;
+                    }
+                });
+            });
+        }
+
+        // Reset filters
+        function resetFilter() {
+            activeFilters = [];
+            filteredData = [...csvData];
+            updateActiveFiltersDisplay();
+            currentPage = 1;
+            displayDataPreview();
+            updatePagination();
+            updateRowCounts();
+        }
+
+        // Update active filters display
+        function updateActiveFiltersDisplay() {
+            if (activeFilters.length === 0) {
+                activeFiltersSpan.textContent = 'None';
+            } else {
+                activeFiltersSpan.textContent = activeFilters.map(filter => {
+                    return `${filter.column} ${filter.operation} "${filter.value}"`;
+                }).join(', ');
+            }
+        }
+
+        // Update row counts
+        function updateRowCounts() {
+            rowCountSpan.textContent = filteredData.length;
+            totalRowCountSpan.textContent = csvData.length;
+        }
+
+        // Set up stats options
+        function setupStatsOptions() {
+            statsColumnSelect.innerHTML = '';
+            
+            headers.forEach(header => {
+                // Only add numeric columns for statistics
+                if (typeof csvData[0][header] === 'number') {
+                    let option = document.createElement('option');
+                    option.value = header;
+                    option.textContent = header;
+                    statsColumnSelect.appendChild(option);
+                }
+            });
+            
+            // Generate stats for first numeric column
+            if (statsColumnSelect.options.length > 0) {
+                generateStats();
+            }
+        }
+
+        // Generate statistics
+        function generateStats() {
+            const column = statsColumnSelect.value;
+            
+            if (!column) {
+                statsDisplay.innerHTML = '<p>No numeric column selected</p>';
+                return;
+            }
+            
+            // Extract values for the selected column
+            const values = filteredData.map(row => row[column]).filter(val => typeof val === 'number');
+            
+            if (values.length === 0) {
+                statsDisplay.innerHTML = '<p>No numeric data available</p>';
+                return;
+            }
+            
+            // Calculate statistics
+            const sum = values.reduce((a, b) => a + b, 0);
+            const mean = sum / values.length;
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            
+            // Calculate median
+            const sortedValues = [...values].sort((a, b) => a - b);
+            const middle = Math.floor(sortedValues.length / 2);
+            const median = sortedValues.length % 2 === 0 ? 
+                (sortedValues[middle - 1] + sortedValues[middle]) / 2 : 
+                sortedValues[middle];
+                
+            // Calculate standard deviation
+            const variance = values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length;
+            const stdDev = Math.sqrt(variance);
+            
+            // Display statistics
+            statsDisplay.innerHTML = `
+                <div class="stats-card">
+                    <h3>Count</h3>
+                    <div class="stat-value">${values.length}</div>
+                </div>
+                <div class="stats-card">
+                    <h3>Sum</h3>
+                    <div class="stat-value">${sum.toFixed(2)}</div>
+                </div>
+                <div class="stats-card">
+                    <h3>Mean</h3>
+                    <div class="stat-value">${mean.toFixed(2)}</div>
+                </div>
+                <div class="stats-card">
+                    <h3>Median</h3>
+                    <div class="stat-value">${median.toFixed(2)}</div>
+                </div>
+                <div class="stats-card">
+                    <h3>Min</h3>
+                    <div class="stat-value">${min.toFixed(2)}</div>
+                </div>
+                <div class="stats-card">
+                    <h3>Max</h3>
+                    <div class="stat-value">${max.toFixed(2)}</div>
+                </div>
+                <div class="stats-card">
+                    <h3>Standard Deviation</h3>
+                    <div class="stat-value">${stdDev.toFixed(2)}</div>
+                </div>
+            `;
+        }
+
+        // Change page
+        function changePage(direction) {
+            const totalPages = Math.ceil(filteredData.length / rowsPerPage);
+            const newPage = currentPage + direction;
+            
+            if (newPage >= 1 && newPage <= totalPages) {
+                currentPage = newPage;
+                displayDataPreview();
+                updatePagination();
+            }
+        }
+
+        // Update pagination info
+        function updatePagination() {
+            const totalPages = Math.ceil(filteredData.length / rowsPerPage);
+            pageInfoSpan.textContent = `Page ${currentPage} of ${totalPages}`;
+            
+            prevPageBtn.disabled = currentPage === 1;
+            nextPageBtn.disabled = currentPage === totalPages || totalPages === 0;
+        }
+
+        // Display data preview in table
+        function displayDataPreview() {
+            // Create table header
+            let headerRow = document.createElement('tr');
+            headers.forEach(header => {
+                let th = document.createElement('th');
+                th.textContent = header;
+                headerRow.appendChild(th);
+            });
+            tableHead.innerHTML = '';
+            tableHead.appendChild(headerRow);
+            
+            // Create table body with pagination
+            tableBody.innerHTML = '';
+            const startIndex = (currentPage - 1) * rowsPerPage;
+            const endIndex = Math.min(startIndex + rowsPerPage, filteredData.length);
+            const pageData = filteredData.slice(startIndex, endIndex);
+            
+            pageData.forEach(row => {
+                let tr = document.createElement('tr');
+                headers.forEach(header => {
+                    let td = document.createElement('td');
+                    td.textContent = row[header];
+                    tr.appendChild(td);
+                });
+                tableBody.appendChild(tr);
+            });
+        }
+
+        // Set up the chart options based on the data
+        function setupChartOptions() {
+            xAxisSelect.innerHTML = '';
+            yAxisSelect.innerHTML = '';
+            
+            headers.forEach(header => {
+                let xOption = document.createElement('option');
+                xOption.value = header;
+                xOption.textContent = header;
+                xAxisSelect.appendChild(xOption);
+                
+                let yOption = document.createElement('option');
+                yOption.value = header;
+                yOption.textContent = header;
+                yAxisSelect.appendChild(yOption);
+            });
+            
+            // Try to automatically select numeric columns for Y-axis
+            for (let i = 0; i < headers.length; i++) {
+                const firstValue = csvData[0][headers[i]];
+                if (typeof firstValue === 'number') {
+                    yAxisSelect.value = headers[i];
+                    break;
+                }
+            }
+        }
+
+        // Generate chart based on selected options
+        function generateChart() {
+            const chartType = chartTypeSelect.value;
+            const xAxis = xAxisSelect.value;
+            const yAxis = yAxisSelect.value;
+            
+            // Check if valid columns are selected
+            if (!xAxis || !yAxis) {
+                alert('Please select valid columns for X and Y axes');
+                return;
+            }
+            
+            // Use filtered data for the chart
+            const chartData = filteredData;
+            
+            // Prepare data for chart
+            const labels = chartData.map(row => row[xAxis]);
+            const data = chartData.map(row => {
+                const value = parseFloat(row[yAxis]);
+                return isNaN(value) ? 0 : value;
+            });
+            
+            // Get chart canvas
+            const ctx = document.getElementById('dataChart').getContext('2d');
+            
+            // Destroy previous chart if exists
+            if (currentChart) {
+                currentChart.destroy();
+            }
+            
+            // Create color arrays for better visualization
+            const backgroundColors = generateColors(labels.length, 0.2);
+            const borderColors = generateColors(labels.length, 1);
+            
+            // Chart configuration
+            const chartConfig = {
+                type: chartType,
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: yAxis,
+                        data: data,
+                        backgroundColor: chartType === 'pie' || chartType === 'polarArea' ? 
+                                         backgroundColors : 'rgba(75, 192, 192, 0.2)',
+                        borderColor: chartType === 'pie' || chartType === 'polarArea' ? 
+                                     borderColors : 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1,
+                        pointBackgroundColor: 'rgba(75, 192, 192, 1)',
+                        pointRadius: chartType === 'scatter' ? 5 : 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            display: chartType !== 'pie' && chartType !== 'polarArea'
+                        },
+                        x: {
+                            display: chartType !== 'pie' && chartType !== 'polarArea'
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `${yAxis} by ${xAxis} (${filteredData.length} rows)`,
+                            font: {
+                                size: 16
+                            }
+                        },
+                        legend: {
+                            display: chartType === 'pie' || chartType === 'polarArea'
+                        }
+                    }
+                }
+            };
+            
+            // Create new chart
+            currentChart = new Chart(ctx, chartConfig);
+        }
+
+        // Generate colors for charts
+        function generateColors(count, alpha) {
+            const colors = [];
+            for (let i = 0; i < count; i++) {
+                const hue = (i * 137) % 360; // Use golden ratio for good distribution
+                colors.push(`hsla(${hue}, 70%, 60%, ${alpha})`);
+            }
+            return colors;
+        }
+    </script>
+</body>
+</html> 
